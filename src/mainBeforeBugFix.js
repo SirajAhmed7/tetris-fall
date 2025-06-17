@@ -5,18 +5,18 @@ const canvas = document.getElementById("blocksCanvas");
 const ctx = canvas.getContext("2d");
 
 // Game configuration
-let unitSize = 12; // Size of each block unit
+// let unitSize = 30; // Size of each block unit
+let unitSize = 10; // Size of each block unit
 let gridWidth, gridHeight;
 let staticUnits = []; // 2D array to store fallen blocks
 
 // Timing variables
 let timeCur = 0;
 let timeEvent = 0;
-let tickRate = 100; // How fast blocks fall (milliseconds)
-let spawnTimer = 0;
-let spawnInterval = 200; // How often to spawn new pieces
+// let tickRate = 500; // How fast blocks fall (milliseconds)
+let tickRate = 80; // How fast blocks fall (milliseconds)
 
-// Current falling pieces
+// Current falling pieces - need array to handle overlapping pieces
 let fallingPieces = [];
 
 // Mouse tracking variables
@@ -27,7 +27,8 @@ let mouseY = 0;
 const pieceTemplates = [
   // O - Square
   {
-    color: "rgba(255, 255, 255, 0.8)",
+    // color: "rgb(255,232,51)",
+    color: "rgb(256,256,256)",
     units: [
       { x: -1, y: 0 },
       { x: 0, y: 0 },
@@ -37,7 +38,8 @@ const pieceTemplates = [
   },
   // I - Line
   {
-    color: "rgba(255, 255, 255, 0.8)",
+    // color: "rgb(51,255,209)",
+    color: "rgb(256,256,256)",
     units: [
       { x: -2, y: 0 },
       { x: -1, y: 0 },
@@ -47,7 +49,8 @@ const pieceTemplates = [
   },
   // S - Right zigzag
   {
-    color: "rgba(255, 255, 255, 0.8)",
+    // color: "rgb(106,255,51)",
+    color: "rgb(256,256,256)",
     units: [
       { x: 0, y: 0 },
       { x: 1, y: 0 },
@@ -57,7 +60,8 @@ const pieceTemplates = [
   },
   // Z - Left zigzag
   {
-    color: "rgba(255, 255, 255, 0.8)",
+    // color: "rgb(255,51,83)",
+    color: "rgb(256,256,256)",
     units: [
       { x: -1, y: 0 },
       { x: 0, y: 0 },
@@ -67,7 +71,8 @@ const pieceTemplates = [
   },
   // L - Right angle
   {
-    color: "rgba(255, 255, 255, 0.8)",
+    // color: "rgb(255,129,51)",
+    color: "rgb(256,256,256)",
     units: [
       { x: -1, y: 0 },
       { x: 0, y: 0 },
@@ -77,7 +82,8 @@ const pieceTemplates = [
   },
   // J - Left angle
   {
-    color: "rgba(255, 255, 255, 0.8)",
+    // color: "rgb(64,100,255)",
+    color: "rgb(256,256,256)",
     units: [
       { x: -1, y: 0 },
       { x: 0, y: 0 },
@@ -87,7 +93,8 @@ const pieceTemplates = [
   },
   // T - T-shape
   {
-    color: "rgba(255, 255, 255, 0.8)",
+    // color: "rgb(160,62,255)",
+    color: "rgb(256,256,256)",
     units: [
       { x: -1, y: 0 },
       { x: 0, y: 0 },
@@ -100,11 +107,11 @@ const pieceTemplates = [
 // Piece constructor
 class Piece {
   constructor(template) {
+    // Always spawn at random x position
     this.x = Math.floor(Math.random() * gridWidth);
-    this.y = -3; // Start above viewport
+    this.y = -2; // Start slightly above viewport
     this.color = template.color;
-    this.units = [...template.units];
-    this.lastMoveTime = 0;
+    this.units = [...template.units]; // Copy the units array
   }
 }
 
@@ -167,6 +174,8 @@ function createNewPiece() {
   const randomTemplate =
     pieceTemplates[Math.floor(Math.random() * pieceTemplates.length)];
   const newPiece = new Piece(randomTemplate);
+  newPiece.hasTriggeredNext = false; // Flag to track if this piece has triggered the next one
+  newPiece.lastMoveTime = 0; // Track last movement time for throttling
 
   // Check if the new piece can spawn
   if (checkCollisions(newPiece, 0, 0)) {
@@ -175,6 +184,11 @@ function createNewPiece() {
   }
 
   fallingPieces.push(newPiece);
+}
+
+// Legacy function name for compatibility
+function generateNewPiece() {
+  createNewPiece();
 }
 
 // Check for collisions
@@ -201,6 +215,15 @@ function applyGravity() {
   for (let i = fallingPieces.length - 1; i >= 0; i--) {
     const piece = fallingPieces[i];
 
+    // Check if this piece should trigger the next piece spawn
+    const journeyProgress = (piece.y + 2) / (gridHeight + 2);
+    // if (journeyProgress >= 0.15 && !piece.hasTriggeredNext) {
+    if (journeyProgress >= 0.001 && !piece.hasTriggeredNext) {
+      // Create next piece immediately (no setTimeout needed)
+      createNewPiece();
+      piece.hasTriggeredNext = true;
+    }
+
     // Try to move piece down
     if (!checkCollisions(piece, 0, 1)) {
       piece.y++;
@@ -210,6 +233,11 @@ function applyGravity() {
       // Remove this piece from falling pieces array
       fallingPieces.splice(i, 1);
     }
+  }
+
+  // If no pieces are falling, create a new one
+  if (fallingPieces.length === 0) {
+    createNewPiece();
   }
 }
 
@@ -237,7 +265,7 @@ function freezePiece(piece) {
     }
   }
 
-  // Clear complete rows
+  // Check for complete rows and clear them
   clearCompleteRows(affectedRows);
 
   // Check if stack is getting too high and manage it
@@ -291,27 +319,24 @@ function manageStackHeight() {
   // Calculate stack height as percentage of viewport
   const stackHeight = (gridHeight - highestPoint) / gridHeight;
 
-  // If stack reaches 35% of viewport height, remove bottom row
-  if (stackHeight >= 0.35) {
+  // If stack reaches 30% of viewport height, remove bottom row
+  if (stackHeight >= 0.3) {
     removeBottomRow();
   }
 }
 
-// Check if mouse is near a piece
-function isMouseNearPiece(piece) {
+// Check if mouse is hovering over a piece
+function checkMouseHover(piece) {
+  // Convert mouse position to grid coordinates
   const mouseGridX = Math.floor(mouseX / unitSize);
   const mouseGridY = Math.floor(mouseY / unitSize);
 
+  // Check if mouse is over any unit of this piece
   for (let unit of piece.units) {
     const unitGridX = piece.x + unit.x;
     const unitGridY = piece.y + unit.y;
 
-    // Check if mouse is within 2 units of this piece unit
-    const distance = Math.sqrt(
-      Math.pow(mouseGridX - unitGridX, 2) + Math.pow(mouseGridY - unitGridY, 2)
-    );
-
-    if (distance <= 2.5) {
+    if (unitGridX === mouseGridX && unitGridY === mouseGridY) {
       return true;
     }
   }
@@ -335,32 +360,29 @@ function getPieceCenterX(piece) {
 // Handle mouse interaction with falling pieces
 function handleMouseInteraction() {
   const currentTime = Date.now();
-  const mouseGridX = Math.floor(mouseX / unitSize);
 
   for (let piece of fallingPieces) {
     // Throttle movement to prevent too frequent updates
-    if (currentTime - piece.lastMoveTime < 150) continue;
+    if (currentTime - piece.lastMoveTime < 200) continue;
 
-    if (isMouseNearPiece(piece)) {
-      const pieceCenterX = getPieceCenterX(piece);
+    if (checkMouseHover(piece)) {
+      const pieceCenterX = getPieceCenterX(piece) * unitSize + unitSize / 2;
 
-      // Calculate direction to move away from mouse
-      let targetDirection = 0;
-      if (mouseGridX > pieceCenterX) {
-        // Mouse is to the right, move piece left
-        targetDirection = -1;
-      } else if (mouseGridX < pieceCenterX) {
-        // Mouse is to the left, move piece right
-        targetDirection = 1;
-      }
-
-      // Try to move in target direction
-      if (
-        targetDirection !== 0 &&
-        !checkCollisions(piece, targetDirection, 0)
-      ) {
-        piece.x += targetDirection;
-        piece.lastMoveTime = currentTime;
+      // Determine which side mouse is on relative to piece center
+      if (mouseX > pieceCenterX) {
+        // Mouse is on right side of piece, move piece left
+        if (!checkCollisions(piece, -1, 0)) {
+          // piece.x -= 1;
+          piece.x -= 3;
+          piece.lastMoveTime = currentTime;
+        }
+      } else {
+        // Mouse is on left side of piece, move piece right
+        if (!checkCollisions(piece, 1, 0)) {
+          // piece.x += 1;
+          piece.x += 3;
+          piece.lastMoveTime = currentTime;
+        }
       }
     }
   }
@@ -368,17 +390,18 @@ function handleMouseInteraction() {
 
 // Render everything
 function render() {
-  // Clear canvas with transparent background
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Clear canvas
+  ctx.fillStyle = "rgb(19,21,25)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const blockSize = unitSize - 1; // Leave small gap between blocks
+  const blockSize = unitSize - 2; // Leave small gap between blocks
 
   // Draw static blocks
   for (let x = 0; x < gridWidth; x++) {
     for (let y = 0; y < gridHeight; y++) {
       if (staticUnits[x][y] !== 0) {
         ctx.fillStyle = staticUnits[x][y];
-        ctx.fillRect(x * unitSize, y * unitSize, blockSize, blockSize);
+        ctx.fillRect(x * unitSize + 1, y * unitSize + 1, blockSize, blockSize);
       }
     }
   }
@@ -387,8 +410,8 @@ function render() {
   for (let piece of fallingPieces) {
     ctx.fillStyle = piece.color;
     for (let unit of piece.units) {
-      const drawX = (piece.x + unit.x) * unitSize;
-      const drawY = (piece.y + unit.y) * unitSize;
+      const drawX = (piece.x + unit.x) * unitSize + 1;
+      const drawY = (piece.y + unit.y) * unitSize + 1;
 
       if (
         drawX >= 0 &&
@@ -410,12 +433,6 @@ function gameLoop() {
   if (timeCur >= timeEvent) {
     applyGravity();
     timeEvent = timeCur + tickRate;
-  }
-
-  // Check if it's time to spawn a new piece
-  if (timeCur >= spawnTimer) {
-    createNewPiece();
-    spawnTimer = timeCur + spawnInterval;
   }
 
   // Handle mouse interactions
